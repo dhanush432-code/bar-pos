@@ -1,10 +1,8 @@
-// src/app/(admin)/admin/sales/page.tsx
-import dbConnect from '@/lib/mongodb';
-import Sale from '@/models/Sale';
-import { DollarSign, ShoppingBag, BarChart2 } from 'lucide-react';
+import { DollarSign, ShoppingBag } from 'lucide-react';
 
+// Define the types for the data we expect from the API
 interface DailySale {
-  _id: string; // Date string like "2023-10-27"
+  _id: string; 
   totalRevenue: number;
   totalItemsSold: number;
   numberOfSales: number;
@@ -15,44 +13,33 @@ interface TotalStats {
   totalSales: number;
 }
 
-// This function runs on the server to perform database aggregations
+// This function now fetches data from our API endpoint
 async function getSalesData(): Promise<{ dailySales: DailySale[], totalStats: TotalStats }> {
-  await dbConnect();
+  try {
+    // It's best practice to use an absolute URL for server-side fetches.
+    // Make sure to create a .env.local file with NEXT_PUBLIC_API_URL=http://localhost:3000
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/sales`, { 
+      cache: 'no-store' // Ensures we always get the latest sales data
+    });
 
-  // Aggregation for daily sales breakdown (last 30 days)
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    if (!res.ok) {
+      throw new Error('Failed to fetch sales data');
+    }
 
-  const dailySales: DailySale[] = await Sale.aggregate([
-    { $match: { timestamp: { $gte: thirtyDaysAgo } } },
-    {
-      $group: {
-        _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
-        totalRevenue: { $sum: "$totalAmount" },
-        totalItemsSold: { $sum: { $sum: "$items.quantity" } },
-        numberOfSales: { $sum: 1 },
-      },
-    },
-    { $sort: { _id: -1 } },
-  ]);
-
-  // Aggregation for overall total stats
-  const totalStatsArr = await Sale.aggregate([
-    {
-      $group: {
-        _id: null,
-        totalRevenue: { $sum: "$totalAmount" },
-        totalSales: { $sum: 1 },
-      },
-    },
-  ]);
-  
-  const totalStats = totalStatsArr[0] || { totalRevenue: 0, totalSales: 0 };
-  
-  return { dailySales, totalStats };
+    return res.json();
+  } catch (error) {
+    console.error("Failed to fetch sales from API:", error);
+    // Return a default empty state to prevent the page from crashing
+    return {
+      dailySales: [],
+      totalStats: { totalRevenue: 0, totalSales: 0 }
+    };
+  }
 }
 
+
 export default async function SalesReportPage() {
+  // The page component calls the fetcher function, but its rendering logic remains the same.
   const { dailySales, totalStats } = await getSalesData();
   const currencySymbol = '₹';
 
@@ -90,17 +77,17 @@ export default async function SalesReportPage() {
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="p-3 text-left">Date</th>
-              <th className="p-3 text-right">Revenue</th>
-              <th className="p-3 text-right">Items Sold</th>
-              <th className="p-3 text-right"># of Sales</th>
+              <th className="p-3 text-left font-semibold text-gray-600">Date</th>
+              <th className="p-3 text-right font-semibold text-gray-600">Revenue</th>
+              <th className="p-3 text-right font-semibold text-gray-600">Items Sold</th>
+              <th className="p-3 text-right font-semibold text-gray-600"># of Sales</th>
             </tr>
           </thead>
           <tbody>
             {dailySales.length > 0 ? (
               dailySales.map((day) => (
                 <tr key={day._id} className="border-b hover:bg-gray-50">
-                  <td className="p-3 font-medium">{new Date(day._id).toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
+                  <td className="p-3 font-medium">{new Date(day._id).toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })}</td>
                   <td className="p-3 text-right">{currencySymbol}{day.totalRevenue.toFixed(2)}</td>
                   <td className="p-3 text-right">{day.totalItemsSold}</td>
                   <td className="p-3 text-right">{day.numberOfSales}</td>

@@ -1,33 +1,36 @@
 // src/app/(admin)/admin/products/page.tsx
-import dbConnect from '@/lib/mongodb';
-import Product, { ProductType } from '@/models/Product';
-import ProductList from '@/app/(admin)/admin/_components/ProductList'; // Import the new client component
 
-// This function runs on the server to get the initial data.
-async function getProducts(): Promise<ProductType[]> {
-  console.log("Attempting to fetch products..."); // <-- Add this
+import dbConnect from '@/lib/mongodb';
+// --- CHANGE 1: Import the main Product model and its type ---
+import Product, { IProduct } from '@/models/Product';
+import ProductList from '@/app/(admin)/admin/_components/ProductList';
+
+// --- CHANGE 2: The getProducts function is now much simpler and faster ---
+// It no longer needs to do complex calculations. It just reads the data.
+async function getProducts(): Promise<IProduct[]> {
+  console.log("Attempting to fetch products from the master Product collection...");
   try {
     await dbConnect();
-    console.log("Database connected."); // <-- Add this
+    console.log("Database connected.");
 
-    const products = await Product.find({}).sort({ createdAt: -1 }).lean();
+    // This is a simple, efficient query to get all products and their live stock.
+    const products = await Product.find({}).sort({ subProductName: 1 }).lean();
     
-    // <-- Add this to see if data is being found -->
-    console.log(`Found ${products.length} products in the database.`);
+    console.log(`Found ${products.length} products with live stock data.`);
 
     return JSON.parse(JSON.stringify(products));
   } catch (error) {
-    // <-- Add this to catch any errors during the process -->
     console.error("ERROR FETCHING PRODUCTS:", error);
     return []; // Return an empty array on error
   }
 }
 
-// This page remains a Server Component.
+// This part of the page remains the same, but now passes the correct data.
 export default async function ProductsPage() {
-  // 1. Fetch data on the server.
+  // 1. Fetch the live data from the Product model on the server.
   const products = await getProducts();
 
-  // 2. Pass the data as a prop to the Client Component, which will handle all UI and interactions.
+  // 2. Pass the correct data as a prop to the Client Component.
+  // The prop will now be of type IProduct[]
   return <ProductList initialProducts={products} />;
 }

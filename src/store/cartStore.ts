@@ -20,13 +20,17 @@ export const useCartStore = create<CartState>((set, get) => ({
   items: [],
   addItem: (product) => {
     const { items } = get();
-    const existingItem = items.find((item) => item.barcode === product.barcode);
+    const existingItem = items.find((item) => item.shortcode
+ === product.shortcode
+);
 
     if (existingItem) {
       // If item exists, just increase quantity
       set({
         items: items.map((item) =>
-          item.barcode === product.barcode ? { ...item, quantity: item.quantity + 1 } : item
+          item.shortcode
+ === product.shortcode
+ ? { ...item, quantity: item.quantity + 1 } : item
         ),
       });
     } else {
@@ -34,23 +38,32 @@ export const useCartStore = create<CartState>((set, get) => ({
       set({ items: [...items, { ...product, quantity: 1 }] });
     }
   },
-  removeItem: (barcode) => {
+  removeItem: (shortcode
+) => {
     set({
-      items: get().items.filter((item) => item.barcode !== barcode),
+      items: get().items.filter((item) => item.shortcode
+ !== shortcode
+),
     });
   },
-  increaseQuantity: (barcode) => {
+  increaseQuantity: (shortcode
+) => {
     set({
       items: get().items.map((item) =>
-        item.barcode === barcode ? { ...item, quantity: item.quantity + 1 } : item
+        item.shortcode
+ === shortcode
+ ? { ...item, quantity: item.quantity + 1 } : item
       ),
     });
   },
-  decreaseQuantity: (barcode) => {
+  decreaseQuantity: (shortcode
+) => {
     set({
       items: get().items
         .map((item) =>
-          item.barcode === barcode ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item
+          item.shortcode
+ === shortcode
+ ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item
         )
     });
   },
