@@ -1,76 +1,103 @@
 // src/app/(admin)/admin/_components/AddProductModal.tsx
 'use client';
 
-import { useState, FormEvent, useEffect } from 'react';
+import { useState, useEffect, FormEvent, useRef } from 'react';
 import toast from 'react-hot-toast';
+import { IProduct } from '@/models/Product';
 import { X } from 'lucide-react';
 
 interface AddProductModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onProductAdded: () => void;
-  initialBarcode?: string;
+  onActionComplete: () => void; // Generic callback for add or update
+  productData: IProduct | null; 
+   initialBarcode?: string;// Pass product data for editing, or null for adding
 }
 
-export default function AddProductModal({ isOpen, onClose, onProductAdded, initialBarcode = '' }: AddProductModalProps) {
-  const [barcode, setBarcode] = useState('');
-  const [product, setProduct] = useState('');
-  const [subProduct, setSubProduct] = useState('');
-  const [unit, setUnit] = useState('');
+export default function AddProductModal({ isOpen, onClose, onActionComplete, productData }: AddProductModalProps) {
+  const isEditMode = Boolean(productData);
+
+  // State for all form fields
+  const [shortcode, setShortcode] = useState('');
+  const [subProductName, setSubProductName] = useState('');
+  const [productCategory, setProductCategory] = useState('');
+  const [mrpRate, setMrpRate] = useState('');
+  const [basicRate, setBasicRate] = useState('');
   const [sRate, setSRate] = useState('');
   const [stock, setStock] = useState('');
-  const [basic, setBasic] = useState(''); // <-- ADD state for the new field
-
   const [isLoading, setIsLoading] = useState(false);
 
+  // Ref for the barcode input to auto-focus for scanning
+  const shortcodeRef = useRef<HTMLInputElement>(null);
+
+  // Effect to populate form when in edit mode or clear it for add mode
   useEffect(() => {
-    if (isOpen && initialBarcode) {
-      setBarcode(initialBarcode);
+    if (isOpen) {
+      if (isEditMode && productData) {
+        setShortcode(productData.shortcode || '');
+        setSubProductName(productData.subProductName);
+        setProductCategory(productData.productCategory);
+        setMrpRate(String(productData.mrpRate));
+        setBasicRate(String(productData.basicRate));
+        setSRate(String(productData.sRate));
+        setStock(String(productData.stock));
+        
+        // Auto-focus and select the barcode input for quick scanning
+        setTimeout(() => {
+          shortcodeRef.current?.focus();
+          shortcodeRef.current?.select();
+        }, 100);
+
+      } else {
+        // Clear form for Add mode
+        setShortcode('');
+        setSubProductName('');
+        setProductCategory('');
+        setMrpRate('');
+        setBasicRate('');
+        setSRate('');
+        setStock('0');
+      }
     }
-    if (!isOpen) {
-      setBarcode('');
-      setProduct('');
-      setSubProduct('');
-      setUnit('');
-      setSRate('');
-      setStock('');
-      setBasic(''); // <-- RESET the new field on close
-    }
-  }, [isOpen, initialBarcode]);
+  }, [isOpen, productData, isEditMode]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    const toastId = toast.loading('Adding new product...');
+    const toastId = toast.loading(isEditMode ? 'Updating product...' : 'Adding product...');
 
-    // Add 'basic' to the data object sent to the API
-    const productData = {
-      barcode,
-      product,
-      subProduct,
-      unit,
+    const payload = {
+      shortcode,
+      subProductName,
+      productCategory,
+      mrpRate: parseFloat(mrpRate),
+      basicRate: parseFloat(basicRate),
       sRate: parseFloat(sRate),
       stock: parseInt(stock, 10),
-      basic: basic ? parseFloat(basic) : null, // Send basic rate or null
     };
 
     try {
-      const res = await fetch('/api/products', {
-        method: 'POST',
+      const url = isEditMode ? `/api/products/${productData?._id}` : '/api/products';
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method: method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(productData),
+        body: JSON.stringify(payload),
       });
 
-      if (res.ok) {
-        toast.success('Product added successfully!', { id: toastId });
-        onProductAdded();
-        onClose();
-      } else {
+      if (!res.ok) {
         const errorData = await res.json();
-        toast.error(`Error: ${errorData.message}`, { id: toastId });
+        throw new Error(errorData.message || 'Action failed.');
       }
+
+      toast.success(`Product ${isEditMode ? 'updated' : 'added'} successfully!`, { id: toastId });
+      onActionComplete();
+      onClose();
+
     } catch (error) {
-      toast.error('An unexpected error occurred.', { id: toastId });
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+      toast.error(errorMessage, { id: toastId });
     } finally {
       setIsLoading(false);
     }
@@ -80,23 +107,69 @@ export default function AddProductModal({ isOpen, onClose, onProductAdded, initi
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-8 w-full max-w-lg relative">
+      <div className="bg-white rounded-lg p-8 w-full max-w-lg relative shadow-xl">
         <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-gray-800"><X size={24} /></button>
-        <h2 className="text-2xl font-bold mb-6">Add New Product</h2>
+        <h2 className="text-2xl font-bold mb-6">{isEditMode ? 'Edit Product' : 'Add New Product'}</h2>
+        
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div><label className="block text-sm font-medium">Barcode *</label><input type="text" value={barcode} onChange={(e) => setBarcode(e.target.value)} required className="w-full mt-1 p-2 border rounded" /></div>
-          <div><label className="block text-sm font-medium">Product Name *</label><input type="text" value={product} onChange={(e) => setProduct(e.target.value)} required className="w-full mt-1 p-2 border rounded" /></div>
-          <div><label className="block text-sm font-medium">Sub Product (e.g., 30ml, Pint) *</label><input type="text" value={subProduct} onChange={(e) => setSubProduct(e.target.value)} required className="w-full mt-1 p-2 border rounded" /></div>
-          <div><label className="block text-sm font-medium">Unit (e.g., Bottle)</label><input type="text" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Bottle, Can, Shot" className="w-full mt-1 p-2 border rounded" /></div>
-          
-          {/* <-- MOVED selling rate and ADDED basic rate --> */}
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="block text-sm font-medium">Basic Rate (₹)</label><input type="number" step="0.01" value={basic} onChange={(e) => setBasic(e.target.value)} className="w-full mt-1 p-2 border rounded" /></div>
-            <div><label className="block text-sm font-medium">Selling Rate (₹) *</label><input type="number" step="0.01" value={sRate} onChange={(e) => setSRate(e.target.value)} required className="w-full mt-1 p-2 border rounded" /></div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Barcode (Shortcode)</label>
+            <input 
+              ref={shortcodeRef}
+              type="text" 
+              value={shortcode} 
+              onChange={(e) => setShortcode(e.target.value)} 
+              placeholder="Scan or enter barcode"
+              className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" 
+            />
           </div>
-          <div><label className="block text-sm font-medium">Initial Stock *</label><input type="number" value={stock} onChange={(e) => setStock(e.target.value)} required className="w-full mt-1 p-2 border rounded" /></div>
-
-          <div className="flex justify-end gap-4 pt-4"><button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button><button type="submit" disabled={isLoading} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-blue-300">{isLoading ? 'Saving...' : 'Save Product'}</button></div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Product Name *</label>
+            <input 
+              type="text" 
+              value={subProductName} 
+              onChange={(e) => setSubProductName(e.target.value)} 
+              required 
+              className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" 
+            />
+          </div>
+           {/* ... other form fields are identical to previous step ... */}
+           <div>
+            <label className="block text-sm font-medium text-gray-700">Category *</label>
+            <input 
+              type="text" 
+              value={productCategory} 
+              onChange={(e) => setProductCategory(e.target.value)} 
+              required 
+              className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" 
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">MRP Rate (₹) *</label>
+              <input type="number" step="0.01" value={mrpRate} onChange={(e) => setMrpRate(e.target.value)} required className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Selling Rate (₹) *</label>
+              <input type="number" step="0.01" value={sRate} onChange={(e) => setSRate(e.target.value)} required className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Basic Rate (₹) *</label>
+              <input type="number" step="0.01" value={basicRate} onChange={(e) => setBasicRate(e.target.value)} required className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Stock *</label>
+              <input type="number" value={stock} onChange={(e) => setStock(e.target.value)} required className="w-full mt-1 p-2 border border-gray-300 rounded-md shadow-sm" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-4 pt-4">
+            <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Cancel</button>
+            <button type="submit" disabled={isLoading} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-blue-300">
+              {isLoading ? 'Saving...' : 'Save Product'}
+            </button>
+          </div>
         </form>
       </div>
     </div>

@@ -38,30 +38,57 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    // Destructure all fields, including the new 'basic' field
-    const { barcode, product, subProduct, unit, sRate, stock, basic } = body;
+    
+    // Destructure all fields from the frontend form
+    const { 
+      subProductName, 
+      productCategory, 
+      shortcode, 
+      mrpRate, 
+      basicRate, 
+      sRate, 
+      stock 
+    } = body;
 
-    // Updated validation
-    if (!barcode || !product || !subProduct || sRate === undefined || stock === undefined) {
-      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
+    // Validation for required fields from the form
+    if (
+      !subProductName || 
+      !productCategory || 
+      mrpRate === undefined || 
+      basicRate === undefined || 
+      sRate === undefined || 
+      stock === undefined
+    ) {
+      return NextResponse.json({ message: 'Missing required fields from form' }, { status: 400 });
     }
 
     await dbConnect();
 
-    const existingProduct = await Product.findOne({ barcode });
-    if (existingProduct) {
-      return NextResponse.json({ message: `Product with barcode ${barcode} already exists` }, { status: 409 });
+    // --- AUTOMATIC CODE GENERATION LOGIC ---
+    // 1. Find the product with the highest 'code' value.
+    const lastProduct = await Product.findOne().sort({ code: -1 });
+    // 2. Determine the new code. If no products exist, start at 100001.
+    const newCode = lastProduct ? lastProduct.code + 1 : 100001;
+    // --- END OF CODE GENERATION LOGIC ---
+
+    // Duplicate check for `shortcode` (barcode) if it's provided.
+    if (shortcode) {
+      const existingByBarcode = await Product.findOne({ shortcode });
+      if (existingByBarcode) {
+        return NextResponse.json({ message: `Product with barcode ${shortcode} already exists` }, { status: 409 });
+      }
     }
 
-    // Create the new product with all fields
+    // Create the new product with the auto-generated code
     const newProduct = new Product({
-      barcode,
-      product,
-      subProduct,
-      unit,
+      code: newCode, // Use the generated code
+      subProductName,
+      productCategory,
+      shortcode,
+      mrpRate: Number(mrpRate),
+      basicRate: Number(basicRate),
       sRate: Number(sRate),
       stock: Number(stock),
-      basic: basic ? Number(basic) : undefined, // Add basic only if it exists
     });
 
     await newProduct.save();

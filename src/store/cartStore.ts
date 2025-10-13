@@ -9,9 +9,9 @@ export interface CartItem extends IProduct {
 type CartState = {
   items: CartItem[];
   addItem: (product: IProduct) => void;
-  removeItem: (barcode: string) => void;
-  increaseQuantity: (barcode: string) => void;
-  decreaseQuantity: (barcode: string) => void;
+  removeItem: (shortcode: string) => void; // CHANGED: barcode -> shortcode
+  increaseQuantity: (shortcode: string) => void; // CHANGED: barcode -> shortcode
+  decreaseQuantity: (shortcode: string) => void; // CHANGED: barcode -> shortcode
   clearCart: () => void;
   getTotal: () => number;
 };
@@ -20,17 +20,15 @@ export const useCartStore = create<CartState>((set, get) => ({
   items: [],
   addItem: (product) => {
     const { items } = get();
-    const existingItem = items.find((item) => item.shortcode
- === product.shortcode
-);
+    const existingItem = items.find((item) => item.shortcode === product.shortcode);
 
     if (existingItem) {
       // If item exists, just increase quantity
       set({
         items: items.map((item) =>
-          item.shortcode
- === product.shortcode
- ? { ...item, quantity: item.quantity + 1 } : item
+          item.shortcode === product.shortcode
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
         ),
       });
     } else {
@@ -38,32 +36,27 @@ export const useCartStore = create<CartState>((set, get) => ({
       set({ items: [...items, { ...product, quantity: 1 }] });
     }
   },
-  removeItem: (shortcode
-) => {
+  removeItem: (shortcode) => {
     set({
-      items: get().items.filter((item) => item.shortcode
- !== shortcode
-),
+      items: get().items.filter((item) => item.shortcode !== shortcode),
     });
   },
-  increaseQuantity: (shortcode
-) => {
+  increaseQuantity: (shortcode) => {
     set({
       items: get().items.map((item) =>
-        item.shortcode
- === shortcode
- ? { ...item, quantity: item.quantity + 1 } : item
+        item.shortcode === shortcode
+          ? { ...item, quantity: item.quantity + 1 }
+          : item
       ),
     });
   },
-  decreaseQuantity: (shortcode
-) => {
+  decreaseQuantity: (shortcode) => {
     set({
       items: get().items
         .map((item) =>
-          item.shortcode
- === shortcode
- ? { ...item, quantity: Math.max(1, item.quantity - 1) } : item
+          item.shortcode === shortcode
+            ? { ...item, quantity: Math.max(1, item.quantity - 1) }
+            : item
         )
     });
   },

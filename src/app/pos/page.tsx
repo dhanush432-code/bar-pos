@@ -29,12 +29,12 @@ export default function POSPage() {
         const product = await res.json();
         if (product.stock > 0) {
             addItem(product);
-            toast.success(`${product.product} added to cart.`);
+            toast.success(`${product.productCategory} added to cart.`);
         } else {
-            toast.error(`${product.product} is out of stock.`);
+            toast.error(`${product.productCategory} is out of stock.`);
         }
       } else if (res.status === 404) {
-        // Product not found, log it and notify bartender
+        // Product not found, log it and notify manager
         toast.error('Unknown Product: Call Manager!');
         await fetch('/api/unknown', {
           method: 'POST',
@@ -62,8 +62,8 @@ export default function POSPage() {
     const saleData = {
       items: items.map(item => ({
         productId: item._id,
-        barcode: item.barcode,
-        product: `${item.product} ${item.subProduct || ''}`.trim(),
+        barcode: item.shortcode,
+        product: `${item.productCategory} ${item.subProductName || ''}`.trim(),
         quantity: item.quantity,
         sRate: item.sRate,
         total: item.sRate * item.quantity,
@@ -137,22 +137,25 @@ export default function POSPage() {
                 </tr>
               ) : (
                 items.map((item) => (
-                  <tr key={item.barcode} className="border-b">
+                  <tr key={item.shortcode} className="border-b">
                     <td className="p-4">
-                      <p className="font-medium">{item.product}</p>
-                      <p className="text-sm text-gray-500">{item.subProduct || item.barcode}</p>
+                      <p className="font-medium">{item.productCategory}</p>
+                      <p className="text-sm text-gray-500">{item.subProductName || item.shortcode}</p>
                     </td>
                     <td className="p-4 text-center">
                         <div className="flex items-center justify-center space-x-2">
-                            <button onClick={() => decreaseQuantity(item.barcode)} className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"><Minus size={16}/></button>
+                            {/* --- FIX: Add non-null assertion (!) --- */}
+                            <button onClick={() => decreaseQuantity(item.shortcode!)} className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"><Minus size={16}/></button>
                             <span className="w-8 text-center font-medium">{item.quantity}</span>
-                            <button onClick={() => increaseQuantity(item.barcode)} className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"><Plus size={16}/></button>
+                            {/* --- FIX: Add non-null assertion (!) --- */}
+                            <button onClick={() => increaseQuantity(item.shortcode!)} className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"><Plus size={16}/></button>
                         </div>
                     </td>
                     <td className="p-4 text-right">${item.sRate.toFixed(2)}</td>
                     <td className="p-4 text-right font-semibold">${(item.sRate * item.quantity).toFixed(2)}</td>
                     <td className="p-4 text-right">
-                      <button onClick={() => removeItem(item.barcode)} className="text-red-500 hover:text-red-700">
+                       {/* --- FIX: Add non-null assertion (!) --- */}
+                      <button onClick={() => removeItem(item.shortcode!)} className="text-red-500 hover:text-red-700">
                         <Trash2 size={20} />
                       </button>
                     </td>
@@ -170,8 +173,8 @@ export default function POSPage() {
             <h2 className="text-3xl font-bold mb-6">Order Summary</h2>
             <div className="space-y-4">
             {items.map(item => (
-                <div key={item.barcode} className="flex justify-between items-center text-gray-700">
-                    <span>{item.product} x{item.quantity}</span>
+                <div key={item.shortcode} className="flex justify-between items-center text-gray-700">
+                    <span>{item.productCategory} x{item.quantity}</span>
                     <span>${(item.sRate * item.quantity).toFixed(2)}</span>
                 </div>
             ))}

@@ -22,8 +22,9 @@ export default function UnknownBarcodeClientPage({ unknownProducts }: Props) {
     setIsModalOpen(true);
   };
 
-  const handleProductAdded = async () => {
-    // After product is added, delete the barcode from the unknown list
+  // Renamed for clarity to match the new modal prop
+  const handleActionComplete = async () => {
+    // This logic remains the same: delete the barcode from the unknown list after adding
     const toastId = toast.loading('Removing barcode from unknown list...');
     try {
       const res = await fetch(`/api/unknown/${selectedBarcode}`, { method: 'DELETE' });
@@ -44,11 +45,13 @@ export default function UnknownBarcodeClientPage({ unknownProducts }: Props) {
       <Toaster />
       <h1 className="text-3xl font-bold mb-6">Unknown Barcode Logs</h1>
       
+      {/* --- UPDATED MODAL INVOCATION --- */}
       <AddProductModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onProductAdded={handleProductAdded}
-        initialBarcode={selectedBarcode}
+        onActionComplete={handleActionComplete} // Use the new prop name
+        productData={null}                     // Pass null to signify "Add Mode"
+        initialBarcode={selectedBarcode}       // Pass the barcode to pre-fill the form
       />
 
       <div className="bg-white p-4 rounded-lg shadow-md">
@@ -77,6 +80,13 @@ export default function UnknownBarcodeClientPage({ unknownProducts }: Props) {
                 </td>
               </tr>
             ))}
+             {unknownProducts.length === 0 && (
+              <tr>
+                <td colSpan={4} className="text-center p-8 text-gray-500">
+                    No unknown barcodes have been logged.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
