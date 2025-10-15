@@ -1,13 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/lib/mongodb';
 import Product from '@/models/Product';
 
 export async function GET(
-  request: Request,
-  // The parameter name now matches the file name
-  { params }: { params: { shortcode: string } }
+  request: NextRequest,
+  context: { params: Promise<{ shortcode: string }> } // ✅ params is now a Promise
 ) {
-  const { shortcode } = params; // This is now much clearer
+  const { shortcode } = await context.params; // ✅ await required
 
   if (!shortcode) {
     return NextResponse.json({ message: 'Shortcode is required' }, { status: 400 });
@@ -15,17 +14,19 @@ export async function GET(
 
   try {
     await dbConnect();
-    
-    // The query is now perfectly readable and consistent
-    const product = await Product.findOne({ shortcode: shortcode });
+
+    const product = await Product.findOne({ shortcode });
 
     if (!product) {
-      return NextResponse.json({ message: `Product with shortcode '${shortcode}' not found` }, { status: 404 });
+      return NextResponse.json(
+        { message: `Product with shortcode '${shortcode}' not found` },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json(product);
   } catch (error) {
-    console.error("API Error fetching product by shortcode:", error);
+    console.error('API Error fetching product by shortcode:', error);
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 // src/app/api/products/[id]/route.ts
 
-import { NextResponse } from 'next/server';
+import { NextResponse,NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../auth/[...nextauth]/route';
 import dbConnect from '@/lib/mongodb';
@@ -8,15 +8,16 @@ import Product from '@/models/Product';
 import mongoose from 'mongoose';
 
 export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } } // The folder name [id] matches the param name 'id'
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }  // <-- note: Promise here
 ) {
+  const { id } = await context.params;  // <-- await to extract id
+
   const session = await getServerSession(authOptions);
   if (!session) {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id } = await params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return NextResponse.json({ message: 'Invalid product ID' }, { status: 400 });
   }
