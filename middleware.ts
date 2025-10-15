@@ -1,6 +1,6 @@
-// middleware.ts
+// Forcing a clean build on Vercel - a trivial change to invalidate the cache
 export { default } from 'next-auth/middleware';
 
 export const config = {
-  matcher: ['/admin/:path*'], // Protect all routes that start with /admin
+  matcher: ['/admin/:path*'],
 };
