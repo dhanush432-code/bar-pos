@@ -1,13 +1,12 @@
-// src/app/pos/page.tsx
 'use client';
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import { ScanLine, History, ShoppingCart, RefreshCw } from 'lucide-react';
+import { ScanLine, History, ShoppingCart, RefreshCw, ArrowRight, CornerDownLeft } from 'lucide-react';
 
-// Interface remains the same, `isReturn` is key
+// Interface for a transaction item
 interface TransactionItem {
-  _id: string; 
+  _id: string;
   productName: string;
   category: string;
   sRate: number;
@@ -22,19 +21,24 @@ export default function POSPage() {
   const [mode, setMode] = useState<'sale' | 'return'>('sale');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // --- ROBUST FOCUSING SOLUTION ---
+  // This useEffect hook is dedicated to keeping the input field focused.
+  // It runs whenever the 'isLoading' state changes.
   useEffect(() => {
-    inputRef.current?.focus();
-  }, [mode]);
+    // If we are NOT loading, it means we are ready for a new scan.
+    // So, we focus the input field.
+    if (!isLoading) {
+      inputRef.current?.focus();
+    }
+  }, [isLoading, mode]); // Also re-focus when mode changes
 
-  // The handleScanSubmit function remains exactly the same.
-  // It correctly adds sales and returns to the single master list.
   const handleScanSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!barcode.trim()) return;
+    if (!barcode.trim() || isLoading) return; // Prevent multiple submissions
 
-    setIsLoading(true);
+    setIsLoading(true); // This will cause the input to blur temporarily
     const toastId = toast.loading(`Processing ${barcode}...`);
-    
+
     try {
       if (mode === 'sale') {
         const res = await fetch('/api/sales/instant', {
@@ -51,12 +55,12 @@ export default function POSPage() {
             sRate: result.product.sRate,
             timestamp: new Date().toISOString(),
           };
-          setRecentTransactions(prev => [newItem, ...prev].slice(0, 50)); // Increase slice size to hold more history
+          setRecentTransactions(prev => [newItem, ...prev].slice(0, 50));
           toast.success(`Sold: ${newItem.productName}`, { id: toastId });
         } else {
           toast.error(result.message || 'Sale failed.', { id: toastId });
         }
-      } else {
+      } else { // Return mode
         const res = await fetch('/api/returns/instant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -83,97 +87,129 @@ export default function POSPage() {
       console.error(error);
     } finally {
       setBarcode('');
-      setIsLoading(false);
-      inputRef.current?.focus(); 
+      setIsLoading(false); // This will trigger the useEffect above to re-focus the input
     }
   };
 
-  // --- NEW LOGIC: Filter transactions based on the current mode ---
-  // This is "derived state". We compute it on every render.
   const filteredTransactions = recentTransactions.filter(tx => {
     if (mode === 'sale') {
-      return !tx.isReturn; // Show items that are NOT returns
-    } else { // mode === 'return'
-      return tx.isReturn; // Show items that ARE returns
+      return !tx.isReturn;
+    } else {
+      return tx.isReturn;
     }
   });
 
+  // Helper to re-focus if the user clicks away from the input
+  const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!(e.target instanceof HTMLElement && e.target.closest('button, input'))) {
+      inputRef.current?.focus();
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100 font-sans p-4 sm:p-6 lg:p-8">
-      <Toaster position="top-center" />
-      <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-2rem)]">
-        <header className="mb-4">
-          <h1 className="text-4xl font-bold text-gray-800">Instant POS</h1>
-          <p className="text-gray-500">
-            {mode === 'sale' ? 'Scan a barcode to instantly complete a sale.' : 'Scan a damaged item to process a return.'}
+    // The main container click handler is a good backup
+    <div className="min-h-screen bg-slate-100 font-sans p-4 sm:p-6 lg:p-8" onClick={handleContainerClick}>
+      <Toaster
+        position="top-center"
+        toastOptions={{
+            success: { iconTheme: { primary: 'white', secondary: '#10b981' }, style: { background: '#10b981', color: 'white' }},
+            error: { iconTheme: { primary: 'white', secondary: '#ef4444' }, style: { background: '#ef4444', color: 'white' }},
+        }}
+      />
+      <div className="w-full mx-auto flex flex-col h-[calc(100vh-2rem)] sm:h-[calc(100vh-3rem)] lg:h-[calc(100vh-4rem)]">
+        <header className="mb-6 text-center">
+          <h1 className="text-5xl font-bold text-slate-800 tracking-tight">Instant POS</h1>
+          <p className="text-slate-500 mt-2 text-lg">
+            {mode === 'sale' ? 'Scan to make an instant sale.' : 'Scan a damaged item to process a return.'}
           </p>
         </header>
 
-        <div className="flex items-center gap-4 mb-6">
-          <button
-            onClick={() => setMode('sale')}
-            className={`flex-1 font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 ${mode === 'sale' ? 'bg-green-500 text-white shadow-md' : 'bg-gray-200 text-gray-600'}`}
-          >
-            <ShoppingCart size={20} /> Sale Mode
-          </button>
-          <button
-            onClick={() => setMode('return')}
-            className={`flex-1 font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 ${mode === 'return' ? 'bg-red-500 text-white shadow-md' : 'bg-gray-200 text-gray-600'}`}
-          >
-            <RefreshCw size={20} /> Return Mode
-          </button>
+        <div className="relative flex p-1 bg-slate-200 rounded-full w-full max-w-sm mx-auto mb-8 shadow-inner">
+            <span
+                className={`absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-full shadow-md transition-all duration-300 ease-in-out ${mode === 'return' ? 'translate-x-full bg-red-500' : 'translate-x-0 bg-green-500'}`}
+            />
+            <button
+                onClick={() => setMode('sale')}
+                className={`relative z-10 flex-1 font-bold py-3 px-4 rounded-full transition-colors flex items-center justify-center gap-2 ${mode === 'sale' ? 'text-white' : 'text-slate-800'}`}
+            >
+                <ShoppingCart size={20} /> Sale
+            </button>
+            <button
+                onClick={() => setMode('return')}
+                className={`relative z-10 flex-1 font-bold py-3 px-4 rounded-full transition-colors flex items-center justify-center gap-2 ${mode === 'return' ? 'text-white' : 'text-slate-800'}`}
+            >
+                <RefreshCw size={20} /> Return
+            </button>
         </div>
-        
+
         <form onSubmit={handleScanSubmit} className="relative mb-6">
-          <ScanLine className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={24} />
+          <ScanLine
+            className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors duration-300 ${mode === 'sale' ? 'text-green-500' : 'text-red-500'}`}
+            size={28}
+          />
           <input
             ref={inputRef}
             type="text"
             value={barcode}
             onChange={(e) => setBarcode(e.target.value)}
-            placeholder={mode === 'sale' ? 'Scan Barcode to Sell...' : 'Scan Barcode to Return...'}
-            className={`w-full pl-14 pr-4 py-4 text-lg border-2 rounded-lg transition focus:ring-2 ${mode === 'sale' ? 'border-gray-300 focus:ring-blue-500 focus:border-blue-500' : 'border-red-300 focus:ring-red-500 focus:border-red-500'}`}
+            placeholder={mode === 'sale' ? 'Scan item to sell...' : 'Scan item to return...'}
+            className={`w-full pl-16 pr-6 py-5 text-xl bg-white border-2 rounded-xl transition-all duration-300 shadow-sm focus:ring-4 ${
+              mode === 'sale'
+                ? 'border-slate-300 focus:border-green-500 focus:ring-green-500/20'
+                : 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+            }`}
             disabled={isLoading}
-            autoFocus
+            autoFocus // Good for initial load
           />
         </form>
 
-        <div className="flex-grow bg-white rounded-lg shadow-md overflow-y-auto flex flex-col">
-          <div className="sticky top-0 bg-gray-50 border-b p-4 z-10">
-             <h2 className="text-xl font-semibold text-gray-700 flex items-center">
-                <History className="mr-2" size={22}/>
-                {/* Title dynamically changes based on mode */}
+        {/* ... rest of your JSX is fine, no changes needed below ... */}
+        <div className="flex-grow bg-white rounded-xl shadow-lg overflow-hidden flex flex-col">
+          <header className="sticky top-0 bg-slate-50/80 backdrop-blur-sm border-b border-slate-200 p-4 z-10">
+             <h2 className="text-xl font-semibold text-slate-700 flex items-center">
+                <History className="mr-3 text-slate-500" size={22}/>
                 {mode === 'sale' ? 'Recent Sales' : 'Recent Returns'}
              </h2>
+          </header>
+
+          <div className="flex-grow overflow-y-auto">
+            {filteredTransactions.length === 0 ? (
+              <div className="flex-grow flex flex-col items-center justify-center h-full text-center text-slate-500 p-8">
+                <div className={`p-5 rounded-full mb-4 ${mode === 'sale' ? 'bg-green-100 text-green-500' : 'bg-red-100 text-red-500'}`}>
+                    {mode === 'sale' ? <ShoppingCart size={48} /> : <RefreshCw size={48} />}
+                </div>
+                <h3 className="text-xl font-semibold text-slate-700">No transactions yet</h3>
+                <p>
+                  {mode === 'sale' ? 'Scan an item to see the sale here.' : 'Scan an item to see the return here.'}
+                </p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-200">
+                {filteredTransactions.map((tx) => (
+                  <li
+                    key={tx._id}
+                    className={`flex justify-between items-center p-4 transition-colors ${tx.isReturn ? 'hover:bg-red-50' : 'hover:bg-green-50'}`}
+                  >
+                    <div className="flex items-center gap-4">
+                        <div className={`p-2 rounded-full ${tx.isReturn ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                           {tx.isReturn ? <CornerDownLeft size={20} /> : <ArrowRight size={20} />}
+                        </div>
+                        <div>
+                            <p className={`font-semibold text-lg ${tx.isReturn ? 'text-red-800' : 'text-slate-800'}`}>{tx.productName}</p>
+                            <p className={`text-sm ${tx.isReturn ? 'text-red-600' : 'text-slate-500'}`}>{tx.category}</p>
+                        </div>
+                    </div>
+                    <div className='text-right'>
+                       <p className={`text-xl font-bold ${tx.isReturn ? 'text-red-700' : 'text-green-700'}`}>
+                          {tx.isReturn ? '-' : ''}₹{tx.sRate.toFixed(2)}
+                       </p>
+                       <p className="text-xs text-slate-400 mt-1">{new Date(tx.timestamp).toLocaleTimeString()}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          
-          {/* --- CHANGE: Use the `filteredTransactions` array for rendering --- */}
-          {filteredTransactions.length === 0 ? (
-            <div className="flex-grow flex items-center justify-center text-center text-gray-500">
-              <p>
-                {/* Empty state message dynamically changes */}
-                {mode === 'sale' ? 'No recent sales to show.' : 'No recent returns to show.'}
-              </p>
-            </div>
-          ) : (
-            <ul className="divide-y divide-gray-200">
-              {filteredTransactions.map((tx) => (
-                <li key={tx._id} className={`flex justify-between items-center p-4 ${tx.isReturn ? 'bg-red-50' : ''}`}>
-                  <div>
-                    <p className={`font-medium ${tx.isReturn ? 'text-red-800' : 'text-gray-800'}`}>{tx.productName}</p>
-                    <p className={`text-sm ${tx.isReturn ? 'text-red-600' : 'text-gray-500'}`}>{tx.category}</p>
-                    <p className="text-xs text-gray-400 mt-1">{new Date(tx.timestamp).toLocaleTimeString()}</p>
-                  </div>
-                  <div className='text-right'>
-                     <p className={`text-lg font-semibold ${tx.isReturn ? 'text-red-700' : 'text-gray-900'}`}>
-                        {tx.isReturn ? '-' : ''}₹{tx.sRate.toFixed(2)}
-                     </p>
-                     {tx.isReturn && <p className='text-xs font-bold text-red-500 uppercase'>Returned</p>}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </div>
     </div>

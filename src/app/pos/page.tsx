@@ -50,6 +50,9 @@ export default function POSPage() {
     } finally {
       setBarcode('');
       setIsLoading(false);
+      // --- FIX 1: Use a timeout to reliably re-focus after the scan and re-render.
+      // This pushes the focus command to the end of the event queue.
+      setTimeout(() => inputRef.current?.focus(), 0);
     }
   };
 
@@ -91,12 +94,21 @@ export default function POSPage() {
       toast.error('Network error during checkout.', { id: toastId });
     }
   };
+  
+  // --- FIX 2: Add a click handler to the main panel to re-focus the input.
+  const handlePanelClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // This checks if the clicked item is a button or is inside a button.
+    // If it's not a button, it re-focuses the main barcode input field.
+    if (!(e.target instanceof HTMLElement && e.target.closest('button'))) {
+        inputRef.current?.focus();
+    }
+  };
 
   return (
     <div className="flex h-screen bg-gray-100 font-sans">
       <Toaster />
-      {/* Left Panel: Barcode Scanner & Cart */}
-      <div className="w-3/5 p-6 flex flex-col">
+      {/* --- FIX 3: Apply the onClick handler to the entire left panel. --- */}
+      <div className="w-3/5 p-6 flex flex-col" onClick={handlePanelClick}>
         <header className="mb-6">
           <h1 className="text-4xl font-bold text-gray-800">Barcode POS</h1>
           <p className="text-gray-500">Scan product barcodes to add them to the cart.</p>
@@ -144,17 +156,14 @@ export default function POSPage() {
                     </td>
                     <td className="p-4 text-center">
                         <div className="flex items-center justify-center space-x-2">
-                            {/* --- FIX: Add non-null assertion (!) --- */}
                             <button onClick={() => decreaseQuantity(item.shortcode!)} className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"><Minus size={16}/></button>
                             <span className="w-8 text-center font-medium">{item.quantity}</span>
-                            {/* --- FIX: Add non-null assertion (!) --- */}
                             <button onClick={() => increaseQuantity(item.shortcode!)} className="p-1 rounded-full bg-gray-200 hover:bg-gray-300"><Plus size={16}/></button>
                         </div>
                     </td>
                     <td className="p-4 text-right">${item.sRate.toFixed(2)}</td>
                     <td className="p-4 text-right font-semibold">${(item.sRate * item.quantity).toFixed(2)}</td>
                     <td className="p-4 text-right">
-                       {/* --- FIX: Add non-null assertion (!) --- */}
                       <button onClick={() => removeItem(item.shortcode!)} className="text-red-500 hover:text-red-700">
                         <Trash2 size={20} />
                       </button>
