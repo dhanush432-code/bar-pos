@@ -4,6 +4,7 @@ import dbConnect from '@/lib/mongodb';
 // --- CHANGE 1: Import the main Product model and its type ---
 import Product, { IProduct } from '@/models/Product';
 import ProductList from '@/app/(admin)/admin/_components/ProductList';
+export const dynamic = 'force-dynamic';
 
 // --- CHANGE 2: The getProducts function is now much simpler and faster ---
 // It no longer needs to do complex calculations. It just reads the data.
