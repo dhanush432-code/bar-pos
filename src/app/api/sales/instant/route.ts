@@ -1,12 +1,12 @@
 // src/app/api/sales/instant/route.ts
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import mongoose from 'mongoose';
-import dbConnect from '@/lib/mongodb';
+import  connectToDB  from '@/lib/mongodb'; // Using your connectToDB from other files
 import Product from '@/models/Product';
 import Sale from '@/models/Sale';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const body = await request.json();
   const { barcode, paymentMethod, quantity } = body;
 
@@ -14,24 +14,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
   }
 
-  await dbConnect();
+  await connectToDB();
   
   const session = await mongoose.startSession();
   session.startTransaction();
 
- try {
-    const { barcode, paymentMethod, quantity } = body; // Moved body parsing inside try block
-
+  try {
     // Step 1: Find the product AND ensure it has enough stock in ONE atomic operation.
+    // This command finds a product matching the barcode where the stock is >= the quantity.
+    // If it finds one, it IMMEDIATELY and ATOMICALLY decrements the stock.
     const product = await Product.findOneAndUpdate(
-      { shortcode: barcode, stock: { $gte: quantity } }, // Query
-      { $inc: { stock: -quantity } }, // The update
-      { session, new: true } // Options
+      { shortcode: barcode, stock: { $gte: quantity } }, // The Query to find the document
+      { $inc: { stock: -quantity } }, // The Update to apply
+      { session, new: true } // Options: run in transaction, return the NEW updated document
     );
 
     // Step 2: Check if the operation was successful.
+    // If 'product' is null, it means the query failed to find a match.
+    // This handles BOTH "not found" and "out of stock" cases.
     if (!product) {
-      // FIX: Removed .lean() to resolve TypeScript error
+      // Check *why* it failed for a better error message.
       const productExists = await Product.findOne({ shortcode: barcode }).session(session);
       
       await session.abortTransaction();
@@ -40,7 +42,6 @@ export async function POST(request: Request) {
       if (!productExists) {
         return NextResponse.json({ message: `Product with barcode '${barcode}' not found` }, { status: 404 });
       } else {
-        // Now TypeScript knows that productExists is a full Mongoose document with a .stock property
         return NextResponse.json({ message: `Out of stock. Only ${productExists.stock} left.` }, { status: 409 });
       }
     }
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
             displayName: descriptiveProductName,
             category: product.productCategory,
             shortcode: product.shortcode,
-            sRate: product.sRate,
+            sRate: product.sRate, // Corrected to sRate
         }
     }, { status: 201 });
 
