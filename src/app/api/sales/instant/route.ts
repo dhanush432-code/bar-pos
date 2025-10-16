@@ -19,24 +19,33 @@ export async function POST(request: Request) {
   const session = await mongoose.startSession();
   session.startTransaction();
 
-  try {
-    const product = await Product.findOne({ shortcode: barcode }).session(session);
+ try {
+    const { barcode, paymentMethod, quantity } = body; // Moved body parsing inside try block
 
+    // Step 1: Find the product AND ensure it has enough stock in ONE atomic operation.
+    const product = await Product.findOneAndUpdate(
+      { shortcode: barcode, stock: { $gte: quantity } }, // Query
+      { $inc: { stock: -quantity } }, // The update
+      { session, new: true } // Options
+    );
+
+    // Step 2: Check if the operation was successful.
     if (!product) {
+      // FIX: Removed .lean() to resolve TypeScript error
+      const productExists = await Product.findOne({ shortcode: barcode }).session(session);
+      
       await session.abortTransaction();
       session.endSession();
-      return NextResponse.json({ message: `Product with barcode '${barcode}' not found` }, { status: 404 });
+
+      if (!productExists) {
+        return NextResponse.json({ message: `Product with barcode '${barcode}' not found` }, { status: 404 });
+      } else {
+        // Now TypeScript knows that productExists is a full Mongoose document with a .stock property
+        return NextResponse.json({ message: `Out of stock. Only ${productExists.stock} left.` }, { status: 409 });
+      }
     }
 
-    if (product.stock < quantity) {
-      await session.abortTransaction();
-      session.endSession();
-      return NextResponse.json({ message: `Out of stock. Only ${product.stock} left.` }, { status: 409 });
-    }
-
-    product.stock -= quantity;
-    await product.save({ session });
-
+    // Step 3: If we get here, the stock was successfully decremented. Now, create the sale.
     const saleTotal = product.sRate * quantity;
     const descriptiveProductName = product.subProductName || product.productCategory;
 
@@ -55,6 +64,7 @@ export async function POST(request: Request) {
     
     await newSale.save({ session });
     
+    // Step 4: Commit the successful transaction.
     await session.commitTransaction();
     
     return NextResponse.json({ 
@@ -62,7 +72,6 @@ export async function POST(request: Request) {
         saleId: newSale._id,
         product: {
             displayName: descriptiveProductName,
-            // --- CHANGE [Backend]: Add the category to the response ---
             category: product.productCategory,
             shortcode: product.shortcode,
             sRate: product.sRate,
